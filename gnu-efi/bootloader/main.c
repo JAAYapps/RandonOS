@@ -133,6 +133,14 @@ int memoryCompare(const void* sourceFile, const void* comparedSourceFile, size_t
 	return matched;
 }
 
+typedef struct {
+	FrameBuffer* frameBuffer;
+	PSF1_FONT* psf1_Font;
+	EFI_MEMORY_DESCRIPTOR* mMap;
+	UINTN mMapSize;
+	UINTN mDescriptorSize;
+} BootInfo;
+
 EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
 	InitializeLib(ImageHandle, SystemTable);
 
@@ -181,7 +189,7 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
 
 	for (Elf64_Phdr* phdr = phdrs; 
 		(char*)phdr < (char*)phdrs + header.e_phnum * header.e_phentsize;
-		phdr = (Elf64_Phdr*)(char*)phdr + header.e_phentsize)
+		phdr = (Elf64_Phdr*)((char*)phdr + header.e_phentsize))
 	{
 		switch (phdr->p_type)
 		{
@@ -199,8 +207,6 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
 	}
 
 	Print(L"I ate the Kernel.\n\r");
-
-	char* (*KernelStart)(FrameBuffer*, PSF1_FONT*) = ((__attribute__((sysv_abi)) char* (*)(FrameBuffer*, PSF1_FONT*) ) header.e_entry);
 
 	PSF1_FONT* newFont = LoadPSF1Font(NULL, L"zap-light16.psf", ImageHandle, SystemTable);
 	if (newFont != NULL)
@@ -220,7 +226,28 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
 	newBuffer->Height,
 	newBuffer->PixelsPerScanLine);
 
-	Print(L"%s\n\r",KernelStart(newBuffer, newFont));
+	EFI_MEMORY_DESCRIPTOR* Map = NULL;
+	UINTN MapSize, MapKey;
+	UINTN DescriptorSize;
+	UINT32 DescriptorVersion;
+	{
+		SystemTable->BootServices->GetMemoryMap(&MapSize, Map, &MapKey, &DescriptorSize, &DescriptorVersion);
+		SystemTable->BootServices->AllocatePool(EfiLoaderData, MapSize, (void**)&Map);
+		SystemTable->BootServices->GetMemoryMap(&MapSize, Map, &MapKey, &DescriptorSize, &DescriptorVersion);
+	}
+
+	BootInfo bootInfo;
+	bootInfo.frameBuffer = newBuffer;
+	bootInfo.psf1_Font = newFont;
+	bootInfo.mMap = Map;
+	bootInfo.mMapSize = MapSize;
+	bootInfo.mDescriptorSize = DescriptorSize;
+
+	SystemTable->BootServices->ExitBootServices(ImageHandle, MapKey);
+
+	void (*KernelStart)(BootInfo*) = ((__attribute__((sysv_abi)) void (*)(BootInfo*) ) header.e_entry);
+
+	KernelStart(&bootInfo);
 
 	return EFI_SUCCESS;
 }
