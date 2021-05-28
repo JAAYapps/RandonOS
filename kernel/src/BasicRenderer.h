@@ -13,7 +13,8 @@ class BasicRenderer{
     public:
         BasicRenderer(Framebuffer* framebuffer, PSF1_FONT* psf1_font);
         void ChangeScreenCurserPosition(unsigned int X, unsigned int Y);
-        void Print(const char str[]);
-        void Print(unsigned int color, const char str[]);
+        void Print(const char** str);
+        void Print(unsigned int color, const char** str);
+        void GoToNextLine();
         void testPsf1Font();
 };

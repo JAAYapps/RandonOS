@@ -29,26 +29,32 @@ void BasicRenderer::putChar(unsigned int color, char chr, unsigned int xOff, uns
     }
 }
 
-void BasicRenderer::Print(const char str[])
+void BasicRenderer::Print(const char** str)
 {
     this->Print(0xffffffff, str);
 }
 
-void BasicRenderer::Print(unsigned int color, const char str[])
+void BasicRenderer::Print(unsigned int color, const char** str)
 {
     char* chr = (char*)str;
     unsigned int count = 0;
     while(*chr != 0 && count < 1000000000){
-        putChar(color, *chr, CursorPosition.X, CursorPosition.Y);
+        this->putChar(color, *chr, CursorPosition.X, CursorPosition.Y);
         CursorPosition.X+=8;
         if(CursorPosition.X + 8 > framebuffer->Width)
         {
             CursorPosition.X = 0;
             CursorPosition.Y += 16;
         }
-        *chr++;
+        chr++;
         count = count + 1;
     }
+}
+
+void BasicRenderer::GoToNextLine()
+{
+    this->CursorPosition.X = 0;
+    this->CursorPosition.Y += 16;
 }
 
 void BasicRenderer::testPsf1Font()
