@@ -9,3 +9,5 @@ class PageTableManager
         PageTable* PMLAddress;
         void MapMemory(void* virtualMemory, void* physicalMemory);
 };
+
+extern PageTableManager GPTM;

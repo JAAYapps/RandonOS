@@ -3,9 +3,9 @@
 #include "Interrupts/IDT.h"
 #include "Interrupts/Interrupts.h"
 #include "IO.h"
+#include "pci.h"
 
 KernelInfo kernelInfo;
-PageTableManager PTM;
 void PrepareMemory(BootInfo* bootInfo)
 {
     uint64_t mMapEntries = bootInfo->mMapSize / bootInfo->mDescriptorSize;
@@ -20,11 +20,11 @@ void PrepareMemory(BootInfo* bootInfo)
     PageTable* PML4 = (PageTable*)GlobalAllocator.RequestPage();
     MemorySet(PML4, 0, 0x1000);
 
-    PTM = PageTableManager(PML4);
+    GPTM = PageTableManager(PML4);
 
     for (uint64_t t = 0; t < GetMemorySize(bootInfo->mMap, mMapEntries, bootInfo->mDescriptorSize); t += 0x1000)
     {
-        PTM.MapMemory((void*)t, (void*)t);
+        GPTM.MapMemory((void*)t, (void*)t);
     }
     
     uint64_t fbBase = (uint64_t)bootInfo->frameBuffer->BaseAddress;
@@ -32,12 +32,12 @@ void PrepareMemory(BootInfo* bootInfo)
     GlobalAllocator.LockPages((void*)fbBase, fbSize / 0x10000 + 1);
     for (uint64_t t = fbBase; t < fbBase + fbSize; t += 4096)
     {
-        PTM.MapMemory((void*)t, (void*)t);
+        GPTM.MapMemory((void*)t, (void*)t);
     }
     
     asm ("mov %0, %%cr3" : : "r" (PML4));
 
-    kernelInfo.PTM = &PTM;
+    kernelInfo.PTM = &GPTM;
 }
 
 IDTR idtr;
@@ -76,18 +76,29 @@ void PrepareACPI(BootInfo* bootInfo)
 {
     ACPI::SDTHeader* xsdt = (ACPI::SDTHeader*)(bootInfo->rsdp->XSDTAddress);
 
-    int entries = (xsdt->Length - sizeof(ACPI::SDTHeader)) / 8;
+    ACPI::MCFGHeader* mcfg = (ACPI::MCFGHeader*)ACPI::FindTable(xsdt, (char*)"MCFG");
 
-    for (int t = 0; t < entries; t++)
-    {
-        ACPI::SDTHeader* newSDTHeader = (ACPI::SDTHeader*)*(uint64_t*)((uint64_t)xsdt + sizeof(ACPI::SDTHeader) + (t * 8));
-        for (int i = 0; i < 4; i++)
-        {
-            GBR->PutChar(newSDTHeader->Signature[i]);
-        }
-        GBR->PutChar(' ');
-    }
+    GBR->Print(to_hstring((uint64_t)mcfg));
     GBR->GoToNextLine();
+    for (int t = 0; t < 4; t++)
+    {
+        GBR->PutChar(mcfg->Header.Signature[t]);
+    }
+
+    PCI::EnumeratePCI(mcfg);
+
+    // int entries = (xsdt->Length - sizeof(ACPI::SDTHeader)) / 8;
+
+    // for (int t = 0; t < entries; t++)
+    // {
+    //     ACPI::SDTHeader* newSDTHeader = (ACPI::SDTHeader*)*(uint64_t*)((uint64_t)xsdt + sizeof(ACPI::SDTHeader) + (t * 8));
+    //     for (int i = 0; i < 4; i++)
+    //     {
+    //         GBR->PutChar(newSDTHeader->Signature[i]);
+    //     }
+    //     GBR->PutChar(' ');
+    // }
+    // GBR->GoToNextLine();
 }
 
 BasicRenderer r = BasicRenderer(NULL, NULL);
