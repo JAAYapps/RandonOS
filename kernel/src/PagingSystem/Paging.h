@@ -21,17 +21,6 @@ struct PageDirectoryEntry {
     bool GetFlag(PT_Flag flag);
     void SetAddress(uint64_t address);
     uint64_t GetAddress();
-    // bool present : 1;
-    // bool ReadWrite : 1;
-    // bool UserSuper : 1;
-    // bool WriteThrough : 1;
-    // bool CacheDisabled : 1;
-    // bool Accessed : 1;
-    // bool Ignore0 : 1;
-    // bool LargerPages : 1;
-    // bool Ignore1 : 1;
-    // uint8_t Availble : 3;
-    // uint64_t Address : 52;
 };
 
 struct PageTable {

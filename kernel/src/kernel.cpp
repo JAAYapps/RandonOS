@@ -6,11 +6,21 @@ extern "C" void _start(BootInfo* bootInfo)
 
     PageTableManager* PTM = kernelInfo.PTM;
 
-    BasicRenderer render(bootInfo->frameBuffer, bootInfo->psf1_font);
+    GBR->Print(0xffffffff, (const char**)"Kernel Initialization is Complete. :)");
+    GBR->GoToNextLine();
+    GBR->Print(0x001545ff, to_hstring((uint64_t)bootInfo->rsdp));
+    GBR->GoToNextLine();
 
-    const char str[38] = "Kernel Initialization is Complete. :)";
-    render.Print(0xffffffff, (const char**)&str);
-    while(true);
+    // while (true)
+    // {
+    //     ProcessMousePacket();
+    // }
+
+    while (true);
+
+    // int* test = (int*)0x80000000000;
+    // *test = 200;
+
     // PTM->MapMemory((void*)0x600000000, (void*)0x80000);
 
     // uint64_t* test = (uint64_t*)0x600000000;

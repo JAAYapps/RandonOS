@@ -1,5 +1,8 @@
 #include "KernelUtil.h"
 #include "GDT/GDT.h"
+#include "Interrupts/IDT.h"
+#include "Interrupts/Interrupts.h"
+#include "IO.h"
 
 KernelInfo kernelInfo;
 PageTableManager PTM;
@@ -26,7 +29,7 @@ void PrepareMemory(BootInfo* bootInfo)
     
     uint64_t fbBase = (uint64_t)bootInfo->frameBuffer->BaseAddress;
     uint64_t fbSize = (uint64_t)bootInfo->frameBuffer->BufferSize + 0x1000;
-    GlobalAllocator.LockPages((void*)fbBase, fbSize / 0x1000 + 1);
+    GlobalAllocator.LockPages((void*)fbBase, fbSize / 0x10000 + 1);
     for (uint64_t t = fbBase; t < fbBase + fbSize; t += 4096)
     {
         PTM.MapMemory((void*)t, (void*)t);
@@ -37,17 +40,73 @@ void PrepareMemory(BootInfo* bootInfo)
     kernelInfo.PTM = &PTM;
 }
 
+IDTR idtr;
+void SetIDTGate(void* handler, uint8_t entryOffset, uint8_t type_attr, uint8_t selector)
+{
+    IDTDescEntry* interrupt = (IDTDescEntry*)(idtr.offset + entryOffset * sizeof(IDTDescEntry));
+    interrupt->SetOffset((uint64_t)handler);
+    interrupt->type_attr = type_attr;
+    interrupt->selector = selector;
+}
+
+void PrepareInterrupts()
+{
+    idtr.limit = 0x0fff;
+    idtr.offset = (uint64_t)GlobalAllocator.RequestPage();
+
+    SetIDTGate((void*)PageFault_Handler, 0xE, IDT_TA_InterruptGate, 0x08);
+    SetIDTGate((void*)DoubleFault_Handler, 0x8, IDT_TA_InterruptGate, 0x08);
+    SetIDTGate((void*)GPFault_Handler, 0xD, IDT_TA_InterruptGate, 0x08);
+    SetIDTGate((void*)Keyboard_Handler, 0x21, IDT_TA_InterruptGate, 0x08);
+    SetIDTGate((void*)Mouse_Handler, 0x2C, IDT_TA_InterruptGate, 0x08);
+
+    asm ("lidt %0" : : "m" (idtr));
+
+    //RemapPIC();
+
+    //InitPS2Mouse();
+
+    //outb(PIC1_DATA, 0b11111101);
+    //outb(PIC2_DATA, 0b11111111);
+
+    //asm ("sti");
+}
+
+void PrepareACPI(BootInfo* bootInfo)
+{
+    ACPI::SDTHeader* xsdt = (ACPI::SDTHeader*)(bootInfo->rsdp->XSDTAddress);
+
+    int entries = (xsdt->Length - sizeof(ACPI::SDTHeader)) / 8;
+
+    for (int t = 0; t < entries; t++)
+    {
+        ACPI::SDTHeader* newSDTHeader = (ACPI::SDTHeader*)*(uint64_t*)((uint64_t)xsdt + sizeof(ACPI::SDTHeader) + (t * 8));
+        for (int i = 0; i < 4; i++)
+        {
+            GBR->PutChar(newSDTHeader->Signature[i]);
+        }
+        GBR->PutChar(' ');
+    }
+    GBR->GoToNextLine();
+}
+
+BasicRenderer r = BasicRenderer(NULL, NULL);
 KernelInfo InitializeKernel(BootInfo* bootInfo)
 {
+    r = BasicRenderer(bootInfo->frameBuffer, bootInfo->psf1_font);
+    GBR = &r;
+
     GDTDescriptor gdtDescriptor;
     gdtDescriptor.Size = sizeof(GDT) - 1;
     gdtDescriptor.Offset = (uint64_t)&DefaultGDT;
     LoadGDT(&gdtDescriptor);
-    while(true);
 
     PrepareMemory(bootInfo);
     MemorySet(bootInfo->frameBuffer->BaseAddress, 0, bootInfo->frameBuffer->BufferSize);
 
-    
+    PrepareInterrupts();
+
+    PrepareACPI(bootInfo);
+
     return kernelInfo;
 }

@@ -4,7 +4,8 @@ BitMap::BitMap(uint8_t* Buffer, size_t Size)
 {
     this->Buffer = Buffer;
     this->Size = Size;
-    ZeroOutMemory(Size);
+    if (this->Buffer != NULL)
+        ZeroOutMemory(Size);
 }
 
 bool BitMap::operator[](uint64_t index)
@@ -45,4 +46,9 @@ void BitMap::ZeroOutMemory(size_t bitMapSize)
 size_t BitMap::GetSize() const
 {
     return this->Size;
+}
+
+uint8_t* BitMap::GetBuffer()
+{
+    return this->Buffer;
 }

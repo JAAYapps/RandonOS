@@ -14,4 +14,5 @@ class BitMap
         bool operator[](uint64_t index);
         bool Set(uint64_t index, bool value);
         size_t GetSize() const;
+        uint8_t* GetBuffer();
 };

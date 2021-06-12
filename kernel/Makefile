@@ -8,7 +8,7 @@ CC = gcc
 ASMC = nasm
 LD = ld
 
-CFLAGS = -static -ffreestanding -fshort-wchar -fno-stack-protector -std=c++11 -fno-exceptions #-static-libstdc++ #-nostdlib  #-O1 -msse -mfpmath=sse -gdwarf 
+CFLAGS = -static -ffreestanding -fshort-wchar -fno-stack-protector -std=c++11 -fno-exceptions -g -mno-red-zone #-static-libstdc++ #-nostdlib  #-O1 -msse -mfpmath=sse -gdwarf 
 ASMFLAGS = 
 LDFLAGS = -T $(LDS) -static -Bsymbolic -nostdlib
 
@@ -26,6 +26,11 @@ OBJS += $(patsubst $(SRCDIR)/%.asm, $(OBJDIR)/%_asm.o, $(ASMSRC))
 DIRS = $(wildcard $(SRCDIR)/*)
 
 kernel: $(OBJS) link
+
+$(OBJDIR)/Interrupts/Interrupts.o: $(SRCDIR)/Interrupts/Interrupts.cpp
+	@ echo !====== COMPILING $^
+	@mkdir -p $(@D)
+	$(CC) -mno-red-zone -mgeneral-regs-only -ffreestanding -c $^ -o $@
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 	@ echo !====== COMPILING $^

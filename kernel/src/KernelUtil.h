@@ -9,6 +9,8 @@
 #include "PagingSystem/PageMapIndexer.h"
 #include "PagingSystem/Paging.h"
 #include "PagingSystem/PageTableManager.h"
+#include "UserInput/Mouse.h"
+#include "acpi.h"
 
 struct BootInfo {
 	Framebuffer* frameBuffer;
@@ -16,6 +18,7 @@ struct BootInfo {
 	EFI_MEMORY_DESCRIPTOR* mMap;
 	uint64_t mMapSize;
 	uint64_t mDescriptorSize;
+	ACPI::RSDP2* rsdp;
 };
 
 extern uint64_t _KernelStart;

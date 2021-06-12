@@ -58,11 +58,10 @@ EFI_FILE* LoadFile(EFI_FILE* Directory, CHAR16* Path, EFI_HANDLE ImageHandle, EF
 	EFI_FILE* LoadedFile;
 
 	EFI_LOADED_IMAGE_PROTOCOL* LoadedImage;
-	SystemTable->BootServices->HandleProtocol(ImageHandle, &gEfiLoadedImageProtocolGuid, (void**)& LoadedImage);
+	SystemTable->BootServices->HandleProtocol(ImageHandle, &gEfiLoadedImageProtocolGuid, (void**)&LoadedImage);
 
 	EFI_SIMPLE_FILE_SYSTEM_PROTOCOL* FileSystem;
-
-	SystemTable->BootServices->HandleProtocol(LoadedImage->DeviceHandle, &gEfiSimpleFileSystemProtocolGuid, (void**)& FileSystem);
+	SystemTable->BootServices->HandleProtocol(LoadedImage->DeviceHandle, &gEfiSimpleFileSystemProtocolGuid, (void**)&FileSystem);
 
 	if (Directory == NULL)
 	{
@@ -70,7 +69,6 @@ EFI_FILE* LoadFile(EFI_FILE* Directory, CHAR16* Path, EFI_HANDLE ImageHandle, EF
 	}
 
 	EFI_STATUS s = Directory->Open(Directory, &LoadedFile, Path, EFI_FILE_MODE_READ, EFI_FILE_READ_ONLY);
-
 	if (s != EFI_SUCCESS)
 	{
 		return NULL;
@@ -125,7 +123,7 @@ int memoryCompare(const void* sourceFile, const void* comparedSourceFile, size_t
 	const int matched = 0;
 
 	const unsigned char *source = sourceFile, *comparedSource = comparedSourceFile;
-	for (size_t i = 0l; i < n; i++)
+	for (size_t i = 0; i < n; i++)
 	{
 		if (source[i] < comparedSource[i]) return isSmaller;
 		else if (source[i] > comparedSource[i]) return isBigger;
@@ -139,7 +137,17 @@ typedef struct {
 	EFI_MEMORY_DESCRIPTOR* mMap;
 	UINTN mMapSize;
 	UINTN mDescriptorSize;
+	void* rsdp;
 } BootInfo;
+
+UINTN StringCompare(CHAR8* sourceFile, CHAR8* comparedSourceFile, UINTN length)
+{
+	for (UINTN i = 0; i < length; i++)
+	{
+		if (*sourceFile != *comparedSourceFile) return 0;
+	}
+	return 1;
+}
 
 EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
 	InitializeLib(ImageHandle, SystemTable);
@@ -161,8 +169,8 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
 		UINTN FileInfoSize;
 		EFI_FILE_INFO* FileInfo;
 		Kernel->GetInfo(Kernel, &gEfiFileInfoGuid, &FileInfoSize, NULL);
-		SystemTable->BootServices->AllocatePool(EfiLoaderData, FileInfoSize, (void**)& FileInfo);
-		Kernel->GetInfo(Kernel, &gEfiFileInfoGuid, &FileInfoSize, (void**)& FileInfo);
+		SystemTable->BootServices->AllocatePool(EfiLoaderData, FileInfoSize, (void**)&FileInfo);
+		Kernel->GetInfo(Kernel, &gEfiFileInfoGuid, &FileInfoSize, (void**)&FileInfo);
 
 		UINTN size = sizeof(header);
 		Kernel->Read(Kernel, &size, &header);
@@ -183,7 +191,7 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
 	{
 		Kernel->SetPosition(Kernel, header.e_phoff);
 		UINTN size = header.e_phnum * header.e_phentsize;
-		SystemTable->BootServices->AllocatePool(EfiLoaderData, size, (void**)& phdrs);
+		SystemTable->BootServices->AllocatePool(EfiLoaderData, size, (void**)&phdrs);
 		Kernel->Read(Kernel, &size, phdrs);
 	}
 
@@ -236,16 +244,33 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
 		SystemTable->BootServices->GetMemoryMap(&MapSize, Map, &MapKey, &DescriptorSize, &DescriptorVersion);
 	}
 
+	EFI_CONFIGURATION_TABLE* configTable = SystemTable->ConfigurationTable;
+	void* rsdp = NULL;
+	EFI_GUID Acpi2TableGuid = ACPI_20_TABLE_GUID;
+	for (UINTN index = 0; index < SystemTable->NumberOfTableEntries; index++)
+	{
+		if (CompareGuid(&configTable[index].VendorGuid, &Acpi2TableGuid))
+		{
+			if (StringCompare((CHAR8*)"RSD PTR ", (CHAR8*)configTable->VendorTable, 8))
+			{
+				rsdp = (void*)configTable->VendorTable;
+			}
+		}
+		configTable++;
+	}
+	
+
+	void (*KernelStart)(BootInfo*) = ((__attribute__((sysv_abi)) void (*)(BootInfo*) ) header.e_entry);
+
 	BootInfo bootInfo;
 	bootInfo.frameBuffer = newBuffer;
 	bootInfo.psf1_Font = newFont;
 	bootInfo.mMap = Map;
 	bootInfo.mMapSize = MapSize;
 	bootInfo.mDescriptorSize = DescriptorSize;
+	bootInfo.rsdp = rsdp;
 
 	SystemTable->BootServices->ExitBootServices(ImageHandle, MapKey);
-
-	void (*KernelStart)(BootInfo*) = ((__attribute__((sysv_abi)) void (*)(BootInfo*) ) header.e_entry);
 
 	KernelStart(&bootInfo);
 
